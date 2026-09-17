@@ -49,6 +49,24 @@ pub struct Swap<'info> {
         associated_token::authority = user,
     )]
     pub user_y: Box<Account<'info, TokenAccount>>,
+    /// CHECK: PDA authority for the treasury token accounts — validated via seeds/bump.
+    #[account(
+        seeds = [b"treasury", config.key().as_ref()],
+        bump = config.treasury_bump,
+    )]
+    pub treasury: UncheckedAccount<'info>,
+    #[account(
+        mut,
+        associated_token::mint = mint_x,
+        associated_token::authority = treasury,
+    )]
+    pub treasury_x: Box<Account<'info, TokenAccount>>,
+    #[account(
+        mut,
+        associated_token::mint = mint_y,
+        associated_token::authority = treasury,
+    )]
+    pub treasury_y: Box<Account<'info, TokenAccount>>,
     pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
     pub associated_token_program: Program<'info, AssociatedToken>,
@@ -71,12 +89,25 @@ impl<'info> Swap<'info> {
             false => LiquidityPair::Y,
         };
 
-        let swap_result: constant_product_curve::SwapResult = curve
+        let swap_result = curve
             .swap(p, amount, min)
             .map_err(|_| AmmError::SlippageExceeded)?;
 
+        let protocol_fee_amount = (swap_result.withdraw as u128)
+            .checked_mul(self.config.protocol_fee as u128)
+            .and_then(|v| v.checked_div(10_000))
+            .ok_or(AmmError::Overflow)? as u64;
+
+        let user_amount = swap_result
+            .withdraw
+            .checked_sub(protocol_fee_amount)
+            .ok_or(AmmError::Underflow)?;
+
+        require!(user_amount >= min, AmmError::SlippageExceeded);
+
         self.deposit_tokens(is_x, swap_result.deposit)?;
-        self.withdraw_tokens(is_x, swap_result.withdraw)
+        self.withdraw_to_user(is_x, user_amount)?;
+        self.withdraw_to_treasury(is_x, protocol_fee_amount)
     }
 
     pub fn deposit_tokens(&mut self, is_x: bool, amount: u64) -> Result<()> {
@@ -104,7 +135,15 @@ impl<'info> Swap<'info> {
         )
     }
 
-    pub fn withdraw_tokens(&mut self, is_x: bool, amount: u64) -> Result<()> {
+    fn config_signer_seeds(&self) -> [Vec<u8>; 3] {
+        [
+            b"config".to_vec(),
+            self.config.seed.to_le_bytes().to_vec(),
+            vec![self.config.config_bump],
+        ]
+    }
+
+    pub fn withdraw_to_user(&mut self, is_x: bool, amount: u64) -> Result<()> {
         let (from, to) = match is_x {
             true => (
                 self.vault_y.to_account_info(),
@@ -113,6 +152,40 @@ impl<'info> Swap<'info> {
             false => (
                 self.vault_x.to_account_info(),
                 self.user_x.to_account_info(),
+            ),
+        };
+
+        transfer(
+            CpiContext::new_with_signer(
+                self.token_program.key(),
+                Transfer {
+                    from,
+                    to,
+                    authority: self.config.to_account_info(),
+                },
+                &[&[
+                    b"config",
+                    &self.config.seed.to_le_bytes(),
+                    &[self.config.config_bump],
+                ]],
+            ),
+            amount,
+        )
+    }
+
+    pub fn withdraw_to_treasury(&mut self, is_x: bool, amount: u64) -> Result<()> {
+        if amount == 0 {
+            return Ok(());
+        }
+
+        let (from, to) = match is_x {
+            true => (
+                self.vault_y.to_account_info(),
+                self.treasury_y.to_account_info(),
+            ),
+            false => (
+                self.vault_x.to_account_info(),
+                self.treasury_x.to_account_info(),
             ),
         };
 

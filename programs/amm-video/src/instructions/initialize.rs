@@ -4,7 +4,7 @@ use anchor_spl::{
     token::{Mint, Token, TokenAccount},
 };
 
-use crate::state::Config;
+use crate::{error::AmmError, state::Config};
 
 #[derive(Accounts)]
 #[instruction(seed: u64)]
@@ -36,6 +36,26 @@ pub struct Initialize<'info> {
         associated_token::authority = config,
     )]
     pub vault_y: Account<'info, TokenAccount>,
+    /// CHECK: PDA used only as the treasury token accounts' authority — holds no data itself.
+    #[account(
+        seeds = [b"treasury", config.key().as_ref()],
+        bump,
+    )]
+    pub treasury: UncheckedAccount<'info>,
+    #[account(
+        init,
+        payer = initializer,
+        associated_token::mint = mint_x,
+        associated_token::authority = treasury,
+    )]
+    pub treasury_x: Account<'info, TokenAccount>,
+    #[account(
+        init,
+        payer = initializer,
+        associated_token::mint = mint_y,
+        associated_token::authority = treasury,
+    )]
+    pub treasury_y: Account<'info, TokenAccount>,
     #[account(
         init,
         payer = initializer,
@@ -54,18 +74,26 @@ impl<'info> Initialize<'info> {
         &mut self,
         seed: u64,
         fee: u16,
+        protocol_fee: u16,
         authority: Option<Pubkey>,
         bumps: InitializeBumps,
     ) -> Result<()> {
+        require!(
+            (fee as u32) + (protocol_fee as u32) <= 10_000,
+            AmmError::FeePercentErr
+        );
+
         self.config.set_inner(Config {
             seed,
             authority,
             mint_x: self.mint_x.key(),
             mint_y: self.mint_y.key(),
             fee,
+            protocol_fee,
             locked: false,
             config_bump: bumps.config,
             lp_bump: bumps.mint_lp,
+            treasury_bump: bumps.treasury,
         });
 
         Ok(())
