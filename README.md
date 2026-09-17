@@ -531,3 +531,5 @@ Before deploying to mainnet:
 - Conduct fuzz testing
 - Validate economic assumptions
 - Review overflow and precision handling
+
+![AMM test results](./assets/amm_26_tests.png)
