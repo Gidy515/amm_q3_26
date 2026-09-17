@@ -1,4 +1,4 @@
-/*use {
+use {
     anchor_lang::{
         solana_program::instruction::Instruction, system_program::ID as SYSTEM_PROGRAM_ID,
         InstructionData, ToAccountMetas,
@@ -20,6 +20,10 @@ pub fn create_initialise_ix(
     mint_lp: Pubkey,
     vault_x: Pubkey,
     vault_y: Pubkey,
+    treasury: Pubkey,
+    treasury_x: Pubkey,
+    treasury_y: Pubkey,
+    protocol_fee: u16,
 ) -> Instruction {
     let maker = payer.pubkey();
 
@@ -28,6 +32,7 @@ pub fn create_initialise_ix(
         &amm_video::instruction::Initialize {
             seed: 123,
             fee: 30,
+            protocol_fee,
             authority: Some(maker),
         }
         .data(),
@@ -38,6 +43,9 @@ pub fn create_initialise_ix(
             mint_lp,
             vault_x,
             vault_y,
+            treasury,
+            treasury_x,
+            treasury_y,
             config,
             token_program: TOKEN_PROGRAM_ID,
             associated_token_program: ASSOCIATED_TOKEN_PROGRAM_ID,
@@ -46,4 +54,3 @@ pub fn create_initialise_ix(
         .to_account_metas(None),
     )
 }
-*/

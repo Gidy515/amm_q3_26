@@ -135,14 +135,6 @@ impl<'info> Swap<'info> {
         )
     }
 
-    fn config_signer_seeds(&self) -> [Vec<u8>; 3] {
-        [
-            b"config".to_vec(),
-            self.config.seed.to_le_bytes().to_vec(),
-            vec![self.config.config_bump],
-        ]
-    }
-
     pub fn withdraw_to_user(&mut self, is_x: bool, amount: u64) -> Result<()> {
         let (from, to) = match is_x {
             true => (

@@ -1,4 +1,4 @@
-/*use {
+use {
     anchor_lang::{
         solana_program::instruction::Instruction, system_program::ID as SYSTEM_PROGRAM_ID,
         InstructionData, ToAccountMetas,
@@ -20,6 +20,12 @@ pub fn create_swap_ix(
     config: Pubkey,
     vault_x: Pubkey,
     vault_y: Pubkey,
+    treasury: Pubkey,
+    treasury_x: Pubkey,
+    treasury_y: Pubkey,
+    is_x: bool,
+    amount_in: u64,
+    min_amount_out: u64,
 ) -> Instruction {
     let user = payer.pubkey();
     let user_x = associated_token::get_associated_token_address(&user, &mint_x);
@@ -28,9 +34,9 @@ pub fn create_swap_ix(
     Instruction::new_with_bytes(
         amm_video::id(),
         &amm_video::instruction::Swap {
-            is_x: true,
-            amount_in: 10_000_000,
-            min_amount_out: 5_000_000,
+            is_x,
+            amount_in,
+            min_amount_out,
         }
         .data(),
         amm_video::accounts::Swap {
@@ -43,6 +49,9 @@ pub fn create_swap_ix(
             vault_y,
             user_x,
             user_y,
+            treasury,
+            treasury_x,
+            treasury_y,
             token_program: TOKEN_PROGRAM_ID,
             associated_token_program: ASSOCIATED_TOKEN_PROGRAM_ID,
             system_program: SYSTEM_PROGRAM_ID,
@@ -50,4 +59,3 @@ pub fn create_swap_ix(
         .to_account_metas(None),
     )
 }
-*/
